@@ -705,7 +705,9 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
         self.transformer.set_num_special_tokens(num_special_tokens)
         self.lm_head.set_embeddings_weights(self.transformer.wte.weight, predict_special_tokens=predict_special_tokens)
 
-    def forward(self, input_ids, position_ids=None, token_type_ids=None, lm_labels=None, past=None, reduction='mean', loss_f=CrossEntropyLoss):
+    def forward(self, input_ids, position_ids=None, token_type_ids=None,
+                lm_labels=None, past=None, reduction='mean',
+                loss_f=CrossEntropyLoss, k=0):
         transformer_output = self.transformer(input_ids, position_ids, token_type_ids, past)
         if self.transformer.output_attentions:
             all_attentions, hidden_states, presents = transformer_output
@@ -716,8 +718,11 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
             # Shift so that tokens < n predict n
             shift_logits = lm_logits[..., :-1, :].contiguous()
             shift_labels = lm_labels[..., 1:].contiguous()
+            if k > 0:
+                loss_fct = loss_f(k=k, ignore_index=-1, reduction=('none' if reduction == 'batch' else reduction))
+            else:
+                loss_fct = loss_f(ignore_index=-1, reduction=('none' if reduction == 'batch' else reduction))
             # Flatten the tokens
-            loss_fct = loss_f(ignore_index=-1, reduction=('none' if reduction == 'batch' else reduction))
             loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)),
                             shift_labels.view(-1))
             if reduction == 'batch':
